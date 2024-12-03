@@ -13,6 +13,8 @@
 - [Contributing](#contributing)
 - [License](#license)
 
+---
+
 ## Introduction
 The YouTube Summarizer with Llama 3 is a tool that allows users to easily extract information, generate transcriptions, and produce detailed summaries from YouTube videos. By leveraging the power of `LangChain`, `Ollama`, and `pytube`, it supports a wide range of languages to deliver high-quality and multilingual summaries.
 
