@@ -1,106 +1,116 @@
+# Multilingual YouTube Video Summarizer with Llama 3
 
-# 🌿 YouTube Summarizer with Llama 3 🌿
+A Python application for extracting YouTube transcripts and generating concise summaries with **Llama 3**. The project combines transcript processing, chunking, local LLM inference, and translation to make long-form video content easier to review across multiple languages.
 
-## Table of Contents
-- [Introduction](#introduction)
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Available Languages](#available-languages)
-- [Customization](#customization)
-- [How It Works](#how-it-works)
-- [Contributing](#contributing)
-- [License](#license)
+## What It Does
 
----
+- Accepts a YouTube video URL and retrieves video information.
+- Extracts the available transcript from the video.
+- Splits long transcripts into manageable chunks for LLM processing.
+- Uses **Llama 3 through Ollama** to summarize transcript content.
+- Uses a map-reduce summarization workflow for longer videos.
+- Supports multilingual output through translation.
+- Provides configurable temperature, chunk-size, and overlap settings.
+- Includes a browser-based interface for interacting with the workflow.
 
-## Introduction
-The YouTube Summarizer with Llama 3 is a tool that allows users to easily extract information, generate transcriptions, and produce detailed summaries from YouTube videos. By leveraging the power of `LangChain`, `Ollama`, and `pytube`, it supports a wide range of languages to deliver high-quality and multilingual summaries.
+## Tech Stack
 
-## Features
-- Extracts video details (title and description) from YouTube URLs.
-- Transcribes YouTube videos using LangChain's document loaders.
-- Summarizes the transcription using the Llama 3 model.
-- Supports multi-language summaries with automatic translation.
-- Provides a user-friendly UI with custom CSS for a clean, modern look.
-- Adjustable chunk size, overlap size, and temperature settings for better control over text processing.
+- **Python**
+- **Llama 3**
+- **Ollama**
+- **LangChain**
+- **Gradio**
+- **YouTube transcript/document loaders**
+- **deep-translator**
 
-## Prerequisites
-Before you begin, ensure you have the following installed:
-- Python 3.8 or higher
-- `pip` package manager
-- `Ollama` installed locally and running on `http://localhost:11434`
-- Access to OpenAI models (e.g., `gpt-4`)
+## Workflow
 
-## Installation
+```text
+YouTube URL
+    ↓
+Video metadata + transcript
+    ↓
+Transcript cleaning / chunking
+    ↓
+Llama 3 summarization
+    ↓
+Map-reduce combination
+    ↓
+Optional translation
+    ↓
+Multilingual summary
+```
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/motolomygolda/MultiLingual-YouTube-Summarizer-using-LLAMA3.git
-    cd MultiLingual-YouTube-Summarizer-using-LLAMA3
-    ```
+## Why This Project
 
-2. Install the required Python packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+Long videos can contain useful information but are time-consuming to review. This project explores how a locally served large language model can turn video transcripts into shorter, readable summaries while allowing the user to request output in different languages.
 
-3. Ensure Ollama is running on your local machine:
-    - Download and install [Ollama](https://ollama.com).
-    - Run the server using:
-      ```bash
-      ollama start
-      ```
+It also provided hands-on experience with LLM application workflows, prompt-based summarization, text chunking, local model serving, and integrating multiple Python libraries into one application.
 
-## Usage
-1. Run the application:
-    ```bash
-    python main.py
-    ```
-   
-2. Access the UI:
-   - Open your browser and go to `http://localhost:7860`.
-   
-3. How to use the interface:
-   - Enter a YouTube URL in the text box.
-   - Click "Get Info" to fetch the video title and description.
-   - Click "Get Transcription" to extract the transcript and token count.
-   - Adjust settings (e.g., temperature, chunk size, overlap size, language).
-   - Click "Summarize" to generate a summary.
+## Getting Started
 
-## Available Languages
-The summarizer supports the following languages:
-- African Languages: Amharic, Hausa, Kinyarwanda, Somali, Swahili, Tigrinya, Twi, Wolof, Yoruba, Zulu, Oromo.
-- Indian Languages: Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, Telugu.
-- European Languages: English, French, German, Greek, Italian, Portuguese, Spanish, Swedish, Dutch, Danish, Finnish, Norwegian, Polish, Romanian, Russian, Ukrainian, Welsh.
-- Asian Languages: Arabic, Chinese (Simplified & Traditional), Hebrew, Japanese, Korean, Persian, Thai, Vietnamese.
-- Others: Filipino, Indonesian, Catalan, Slovak, Slovenian, Croatian, Lithuanian, Latvian, Hungarian, Icelandic, Estonian, Czech, Bulgarian.
+### 1. Clone this repository
 
-## Customization
-If you want to change the application's look, modify the `custom_css` section in the script to update the background colors, button styles, and other UI elements.
+```bash
+git clone https://github.com/sisbeyene/MULTI-LINGUAL-YOUTUBEVIDEO-SUMMARIZER-USING-LLAMA3.git
+cd MULTI-LINGUAL-YOUTUBEVIDEO-SUMMARIZER-USING-LLAMA3
+```
 
-## How It Works
-### 1. Extract Video Details
-- Uses `pytube` to fetch the video title.
-- Retrieves the video description using a regex-based approach.
+### 2. Install dependencies
 
-### 2. Transcription
-- Leverages `LangChain` with the `YoutubeLoader` to extract the full video transcript.
-- Uses `RecursiveCharacterTextSplitter` to split long transcripts into manageable chunks.
+```bash
+pip install -r requirements.txt
+```
 
-### 3. Summarization
-- The `Ollama` Llama 3 model processes the text chunks using a map-reduce approach.
-- Custom prompt templates help generate detailed summaries.
-- Optionally translates the summary using `GoogleTranslator`.
+### 3. Install and run Ollama
 
-## Contributing
-Contributions are welcome! If you have suggestions or improvements, please create an issue or submit a pull request.
+Install Ollama and make sure Llama 3 is available locally.
 
-### To Do:
-- [ ] Improve UI with additional animations and design elements.
-- [ ] Add support for more language models.
-- [ ] Optimize the summarization process for longer videos.
+```bash
+ollama pull llama3
+```
 
-## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+Start Ollama if it is not already running, then verify the local service is available before launching the application.
+
+### 4. Run the application
+
+```bash
+python main.py
+```
+
+Open the local URL shown by the application in your browser.
+
+## Using the Application
+
+1. Paste a YouTube URL.
+2. Retrieve the video information and transcript.
+3. Select the desired output language.
+4. Adjust summarization settings if needed.
+5. Generate the summary.
+
+## Multilingual Support
+
+The workflow supports output across a broad set of languages, including English, Spanish, French, German, Arabic, Amharic, Oromo, Somali, Swahili, Hindi, Bengali, Chinese, Japanese, Korean, and others supported by the translation component.
+
+## Repository Structure
+
+```text
+.
+├── main.py              # Main application and summarization workflow
+├── requirements.txt     # Python dependencies
+├── Untitled.ipynb       # Development notebook
+├── Untitled1.ipynb      # Development/experimentation notebook
+└── README.md
+```
+
+## Areas for Improvement
+
+- Improve transcript error handling when captions are unavailable.
+- Add automated tests for the transcript and summarization pipeline.
+- Evaluate summary quality across languages and video lengths.
+- Refactor experimental notebook work into clearer modules.
+- Add a hosted demo or application screenshots.
+
+## Project Note
+
+This repository represents an LLM application project built around existing open-source tools and models including Llama 3, Ollama, LangChain, and Gradio. The focus is on integrating these components into an end-to-end multilingual video summarization workflow.
