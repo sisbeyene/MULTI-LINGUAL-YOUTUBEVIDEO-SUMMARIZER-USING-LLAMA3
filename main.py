@@ -1,194 +1,232 @@
+"""Multilingual YouTube summarizer powered by a locally served Llama 3 model."""
+
+import re
+
+import gradio as gr
 import pytube
 import requests
-import re
-import gradio as gr
-from langchain_community.document_loaders import YoutubeLoader
-from langchain.chains.summarize import load_summarize_chain
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.llms import Ollama
 import tiktoken
 from deep_translator import GoogleTranslator
+from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import YoutubeLoader
+from langchain_community.llms import Ollama
+
+OLLAMA_BASE_URL = "http://localhost:11434"
+MODEL_NAME = "llama3"
+REQUEST_TIMEOUT = 15
+
+LANGUAGES = [
+    "Amharic", "Arabic", "Akan", "Bengali", "Bhojpuri", "Bulgarian", "Catalan",
+    "Chinese (Simplified)", "Croatian", "Czech", "Danish", "Dutch", "English",
+    "Estonian", "Filipino", "Finnish", "French", "German", "Greek", "Gujarati",
+    "Hausa", "Hebrew", "Hindi", "Hungarian", "Icelandic", "Igbo", "Indonesian",
+    "Italian", "Japanese", "Kannada", "Kinyarwanda", "Korean", "Latvian",
+    "Lithuanian", "Luo", "Malay", "Malayalam", "Marathi", "Nepali", "Norwegian",
+    "Odia", "Oromo", "Persian", "Polish", "Portuguese", "Punjabi", "Romanian",
+    "Russian", "Slovak", "Slovenian", "Somali", "Spanish", "Swahili", "Swedish",
+    "Tamil", "Telugu", "Thai", "Tigrinya", "Turkish", "Twi", "Ukrainian",
+    "Urdu", "Vietnamese", "Welsh", "Wolof", "Xhosa", "Yoruba", "Zulu",
+]
+
+MAP_PROMPT = PromptTemplate(
+    input_variables=["text"],
+    template=(
+        "Summarize the following transcript chunk accurately and clearly. Preserve the "
+        "main ideas, important supporting details, and conclusions. Avoid adding facts "
+        "that are not present in the source.\n\nTranscript:\n{text}"
+    ),
+)
+
+COMBINE_PROMPT = PromptTemplate(
+    input_variables=["text"],
+    template=(
+        "Combine the following partial summaries into one coherent final summary. "
+        "Remove repetition while preserving the important ideas, details, and conclusions.\n\n"
+        "Partial summaries:\n{text}"
+    ),
+)
 
 
-# Function to get YouTube description using regex parsing.
-def get_youtube_description(url: str):
-    full_html = requests.get(url).text
-    y = re.search(r'shortDescription":"', full_html)
-    desc = ""
-    count = y.start() + 19  # adding the length of the 'shortDescription":"'
-    while True:
-        letter = full_html[count]
-        if letter == "\"":
-            if full_html[count - 1] == "\\":
-                desc += letter
-                count += 1
-            else:
-                break
-        else:
-            desc += letter
-            count += 1
-    return desc
+def validate_youtube_url(url: str) -> str:
+    """Perform a basic validation before sending a URL to YouTube-related libraries."""
+    url = (url or "").strip()
+    if not url:
+        raise gr.Error("Please enter a YouTube URL.")
+    if not re.match(r"^https?://(www\.)?(youtube\.com|youtu\.be)/", url):
+        raise gr.Error("Please enter a valid YouTube URL.")
+    return url
 
-# Function to get YouTube video info (title and description).
+
+def get_youtube_description(url: str) -> str:
+    """Extract the short video description from the public YouTube page."""
+    url = validate_youtube_url(url)
+    try:
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        match = re.search(r'"shortDescription":"((?:\\.|[^"\\])*)"', response.text)
+        if not match:
+            return "Description unavailable."
+        return bytes(match.group(1), "utf-8").decode("unicode_escape")
+    except requests.RequestException:
+        return "Description unavailable."
+
+
 def get_youtube_info(url: str):
-    yt = pytube.YouTube(url)
-    title = yt.title if yt.title else "None"
-    desc = get_youtube_description(url) or "None"
-    return title, desc
+    """Return a video's title and description."""
+    url = validate_youtube_url(url)
+    try:
+        video = pytube.YouTube(url)
+        return video.title or "Title unavailable.", get_youtube_description(url)
+    except Exception as exc:
+        raise gr.Error(f"Unable to retrieve video information: {exc}") from exc
 
-# Function to get YouTube transcript using LangChain.
-def get_youtube_transcript_loader_langchain(url: str):
-    loader = YoutubeLoader.from_youtube_url(url, add_video_info=True)
-    return loader.load()
 
-# Wrap documents into a single string.
-def wrap_docs_to_string(docs):
-    return " ".join([doc.page_content for doc in docs]).strip()
+def load_transcript(url: str):
+    """Load the transcript as LangChain documents."""
+    url = validate_youtube_url(url)
+    try:
+        loader = YoutubeLoader.from_youtube_url(url, add_video_info=True)
+        docs = loader.load()
+        if not docs:
+            raise ValueError("No transcript was returned.")
+        return docs
+    except Exception as exc:
+        raise gr.Error(
+            "Unable to retrieve a transcript. The video may not have accessible captions."
+        ) from exc
 
-# Function to split text into chunks.
+
+def transcript_to_text(docs) -> str:
+    return " ".join(doc.page_content for doc in docs).strip()
+
+
+def get_youtube_transcription(url: str):
+    """Return transcript text and an estimated token count."""
+    text = transcript_to_text(load_transcript(url))
+    encoding = tiktoken.get_encoding("cl100k_base")
+    return text, len(encoding.encode(text))
+
+
 def get_text_splitter(chunk_size: int, overlap_size: int):
+    chunk_size = int(chunk_size)
+    overlap_size = int(overlap_size)
+    if overlap_size >= chunk_size:
+        raise gr.Error("Overlap size must be smaller than chunk size.")
     return RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=chunk_size, chunk_overlap=overlap_size
+        chunk_size=chunk_size,
+        chunk_overlap=overlap_size,
     )
 
-# Get the full transcript from a YouTube video.
-def get_youtube_transcription(url: str):
-    text = wrap_docs_to_string(get_youtube_transcript_loader_langchain(url))
-    enc = tiktoken.encoding_for_model("gpt-4")
-    count = len(enc.encode(text))
-    
-    return text, count
 
-# Define prompts using PromptTemplate for map_reduce chain.
-map_prompt = PromptTemplate(
-    input_variables=["text"],
-    template="""You are a summarization assistant. Summarize the following text in as much detail as possible. Include all the main ideas, key points, and important details. Provide a thorough and complete summary of the content. Text: {text}"""
-)
+def translate_summary(summary: str, language: str) -> str:
+    """Translate a generated English summary when another language is selected."""
+    if language == "English":
+        return summary
+    try:
+        return GoogleTranslator(source="auto", target=language.lower()).translate(summary)
+    except Exception as exc:
+        raise gr.Error(f"Summary generated, but translation to {language} failed.") from exc
 
-combine_prompt = PromptTemplate(
-    input_variables=["text"],
-    template="""You now have multiple summaries. Combine all of these summaries into one comprehensive, detailed, and thorough final summary. Include all the main ideas and key points from each chunk. The final summary should provide a detailed and full understanding of the original content. Summaries: {text}"""
-)
 
-# Function to generate a summary with map_reduce.
-def get_transcription_summary(url: str, temperature: float, chunk_size: int, overlap_size: int, language: str):
-    docs = get_youtube_transcript_loader_langchain(url)
-    
-    # Adjust chunk size for larger text processing.
-    text_splitter = get_text_splitter(chunk_size=chunk_size, overlap_size=overlap_size)
-    split_docs = text_splitter.split_documents(docs)
+def get_transcription_summary(
+    url: str,
+    temperature: float,
+    chunk_size: int,
+    overlap_size: int,
+    language: str,
+):
+    """Summarize a YouTube transcript with a map-reduce Llama 3 workflow."""
+    docs = load_transcript(url)
+    splitter = get_text_splitter(chunk_size, overlap_size)
+    split_docs = splitter.split_documents(docs)
 
-    # Initialize the model with adjusted temperature.
-    llm = Ollama(model="llama3", base_url="http://localhost:11434", temperature=temperature)
-
-    # Load map_reduce chain with customized prompts.
+    llm = Ollama(
+        model=MODEL_NAME,
+        base_url=OLLAMA_BASE_URL,
+        temperature=float(temperature),
+    )
     chain = load_summarize_chain(
         llm,
         chain_type="map_reduce",
-        map_prompt=map_prompt,
-        combine_prompt=combine_prompt
+        map_prompt=MAP_PROMPT,
+        combine_prompt=COMBINE_PROMPT,
     )
 
-    # Generate the summary.
-    output = chain.invoke(split_docs)
-    summary = output['output_text']
-    
-    
-    # Translate summary if language is not English.
-    if language != 'English':
-        translated_summary = GoogleTranslator(source='auto', target=language.lower()).translate(summary)
-        return translated_summary
+    try:
+        output = chain.invoke(split_docs)
+        summary = output["output_text"].strip()
+    except Exception as exc:
+        raise gr.Error(
+            "Summarization failed. Make sure Ollama is running and the llama3 model is installed."
+        ) from exc
 
-    return summary
+    return translate_summary(summary, language)
 
 
-
-# Custom CSS styling to enhance the UI with green colors
-custom_css = """
-    body {
-        background-color: #f0f9f4; /* Light green background */
-    }
-    .gr-textbox, .gr-number, .gr-dropdown {
-        border-color: #48bb78; /* Green border for inputs */
-    }
-    .gr-button-primary {
-        background-color: #38a169; /* Green for primary buttons */
-        color: #ffffff;
-    }
-    .gr-button-primary:hover {
-        background-color: #2f855a; /* Darker green on hover */
-    }
-    .gr-button-stop {
-        background-color: #e53e3e; /* Red stop button */
-        color: #ffffff;
-    }
-    .gr-panel {
-        background: #ffffff; /* White panel background */
-        border-radius: 8px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
+CUSTOM_CSS = """
+.gr-panel {
+    border-radius: 8px;
+    padding: 20px;
+}
 """
 
-with gr.Blocks(css=custom_css) as demo:
-    gr.Markdown("""# 🌿 **YouTube Summarizer with Llama 3** 🌿  
-    Enter a YouTube URL, get details, and generate transcription and summary easily!  
-    """)
-    with gr.Row(equal_height=True) as r0:
-        with gr.Column(scale=4) as r0c1:
-            url = gr.Textbox(label='Enter the YouTube URL', value="", placeholder="https://youtube.com/watch?v=...")
-        with gr.Column(scale=1) as r0c2:
-            bttn_info_get = gr.Button('Get Info', variant='primary')
-            bttn_clear = gr.ClearButton(interactive=True, variant='stop')
 
-    with gr.Row(variant='panel') as r1:
-        with gr.Column(scale=2) as r1c1:
-            title = gr.Textbox(label='Title', lines=2, max_lines=10, show_copy_button=True)
-        with gr.Column(scale=3) as r1c2:
-            desc = gr.Textbox(label='Description', lines=2, max_lines=10, autoscroll=False, show_copy_button=True)
-            bttn_info_get.click(fn=get_youtube_info, inputs=url, outputs=[title, desc], api_name="get_youtube_info")
+def build_interface():
+    """Build and return the Gradio application."""
+    with gr.Blocks(css=CUSTOM_CSS, title="Multilingual YouTube Summarizer") as demo:
+        gr.Markdown(
+            "# Multilingual YouTube Summarizer with Llama 3\n"
+            "Extract a transcript, estimate its size, and create a multilingual summary "
+            "using a locally served Llama 3 model."
+        )
 
-    with gr.Row(equal_height=True) as r2:        
-        with gr.Column() as r2c1:
-            bttn_trns_get = gr.Button("Get Transcription", variant='primary')
-            tkncount = gr.Number(label='Token Count (est)', interactive=False)
-        with gr.Column() as r2c3:
-            bttn_summ_get = gr.Button("Summarize", variant='primary')
-            with gr.Row():
-                with gr.Column(scale=1, min_width=95):
-                    temperature = gr.Number(label='Temperature', minimum=0.0, step=0.01, precision=-2, value=0.3)
-                with gr.Column(scale=1, min_width=95):
-                    chunk = gr.Number(label='Chunk Size', minimum=200, step=100, value=5000)
-                with gr.Column(scale=1, min_width=95):
-                    overlap = gr.Number(label='Overlap Size', minimum=0, step=10, value=100)
-                with gr.Column(scale=1, min_width=125):
-                    language = gr.Dropdown(label="Language",  choices=[
-                            "Amharic", "Arabic", "Akan", "Bengali", "Bhojpuri", "Bulgarian", "Catalan", 
-                            "Chinese (Simplified)", "Croatian", "Czech", "Danish", 
-                            "Dutch", "English", "Estonian", "Filipino", "Finnish", "French", "German", 
-                            "Greek", "Gujarati", "Hausa", "Hebrew", "Hindi", "Hungarian", "Icelandic", 
-                            "Igbo", "Indonesian", "Italian", "Japanese", "Kannada", "Kinyarwanda", 
-                            "Korean", "Latvian", "Lithuanian", "Luo", "Malay", "Malayalam", "Marathi", 
-                            "Nepali", "Norwegian", "Odia", "Oromo", "Persian", "Polish", "Portuguese", 
-                            "Punjabi", "Romanian", "Russian", "Slovak", "Slovenian", "Somali", "Spanish", 
-                            "Swahili", "Swedish", "Tamil", "Telugu", "Thai", "Tigrinya", "Turkish", 
-                            "Twi", "Ukrainian", "Urdu", "Vietnamese", "Welsh", "Wolof", "Xhosa", "Yoruba", 
-                            "Zulu"
-                        ], value="English")
+        with gr.Row():
+            url = gr.Textbox(
+                label="YouTube URL",
+                placeholder="https://www.youtube.com/watch?v=...",
+                scale=4,
+            )
+            get_info_button = gr.Button("Get Info", variant="primary", scale=1)
+            clear_button = gr.ClearButton()
 
-    with gr.Row() as r3:
-        with gr.Column() as r3c1:
-            trns_raw = gr.Textbox(label='Transcript', show_copy_button=True)
-        with gr.Column() as r3c2:
-            trns_sum = gr.Textbox(label="Summary", show_copy_button=True)
-    
-    bttn_trns_get.click(fn=get_youtube_transcription, inputs=url, outputs=[trns_raw, tkncount])
-    bttn_summ_get.click(fn=get_transcription_summary, inputs=[url, temperature, chunk, overlap, language], outputs=trns_sum)
-    
-    bttn_clear.add([url, title, desc, trns_raw, trns_sum, tkncount])
+        with gr.Row():
+            title = gr.Textbox(label="Title", interactive=False)
+            description = gr.Textbox(label="Description", lines=3, interactive=False)
+
+        with gr.Row():
+            transcript_button = gr.Button("Get Transcript", variant="primary")
+            summarize_button = gr.Button("Generate Summary", variant="primary")
+
+        with gr.Row():
+            temperature = gr.Slider(0.0, 1.0, value=0.3, step=0.05, label="Temperature")
+            chunk_size = gr.Number(value=5000, minimum=200, step=100, label="Chunk Size")
+            overlap_size = gr.Number(value=100, minimum=0, step=10, label="Overlap Size")
+            language = gr.Dropdown(LANGUAGES, value="English", label="Output Language")
+
+        token_count = gr.Number(label="Estimated Token Count", interactive=False)
+
+        with gr.Row():
+            transcript = gr.Textbox(label="Transcript", lines=15, show_copy_button=True)
+            summary = gr.Textbox(label="Summary", lines=15, show_copy_button=True)
+
+        get_info_button.click(get_youtube_info, inputs=url, outputs=[title, description])
+        transcript_button.click(
+            get_youtube_transcription,
+            inputs=url,
+            outputs=[transcript, token_count],
+        )
+        summarize_button.click(
+            get_transcription_summary,
+            inputs=[url, temperature, chunk_size, overlap_size, language],
+            outputs=summary,
+        )
+        clear_button.add([url, title, description, transcript, summary, token_count])
+
+    return demo
 
 
 if __name__ == "__main__":
-    demo.launch(share=True, server_name="localhost", server_port=7860) 
-
+    app = build_interface()
+    app.launch(server_name="localhost", server_port=7860)
