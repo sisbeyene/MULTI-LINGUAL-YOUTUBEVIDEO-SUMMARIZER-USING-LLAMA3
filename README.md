@@ -1,116 +1,124 @@
 # Multilingual YouTube Video Summarizer with Llama 3
 
-A Python application for extracting YouTube transcripts and generating concise summaries with **Llama 3**. The project combines transcript processing, chunking, local LLM inference, and translation to make long-form video content easier to review across multiple languages.
+A Python application that extracts YouTube transcripts and turns long-form video content into readable summaries using a **locally served Llama 3 model**. The application also supports translated output for multilingual use.
 
-## What It Does
+## Features
 
-- Accepts a YouTube video URL and retrieves video information.
-- Extracts the available transcript from the video.
-- Splits long transcripts into manageable chunks for LLM processing.
-- Uses **Llama 3 through Ollama** to summarize transcript content.
-- Uses a map-reduce summarization workflow for longer videos.
-- Supports multilingual output through translation.
-- Provides configurable temperature, chunk-size, and overlap settings.
-- Includes a browser-based interface for interacting with the workflow.
+- Retrieves YouTube video information and available transcripts
+- Estimates transcript token count
+- Splits long transcripts into manageable chunks
+- Summarizes content with **Llama 3 via Ollama**
+- Uses a map-reduce workflow for long videos
+- Supports multilingual summary output
+- Provides configurable temperature, chunk size, and overlap
+- Includes an interactive **Gradio** interface
+- Handles invalid URLs, unavailable captions, translation failures, and local-model errors more clearly
 
 ## Tech Stack
 
-- **Python**
-- **Llama 3**
-- **Ollama**
-- **LangChain**
-- **Gradio**
-- **YouTube transcript/document loaders**
-- **deep-translator**
+**Python • Llama 3 • Ollama • LangChain • Gradio • tiktoken • deep-translator**
 
-## Workflow
+## How It Works
 
 ```text
 YouTube URL
     ↓
 Video metadata + transcript
     ↓
-Transcript cleaning / chunking
+Validation and token estimation
     ↓
-Llama 3 summarization
+Transcript chunking
+    ↓
+Llama 3 map summaries
     ↓
 Map-reduce combination
     ↓
 Optional translation
     ↓
-Multilingual summary
+Final summary
 ```
 
-## Why This Project
+## Why I Built It
 
-Long videos can contain useful information but are time-consuming to review. This project explores how a locally served large language model can turn video transcripts into shorter, readable summaries while allowing the user to request output in different languages.
+Long videos often contain useful information that takes significant time to review. This project explores how a locally hosted large language model can make that content easier to consume while keeping the core LLM inference workflow on the user's machine.
 
-It also provided hands-on experience with LLM application workflows, prompt-based summarization, text chunking, local model serving, and integrating multiple Python libraries into one application.
+The project provided hands-on experience with LLM application development, prompt design, text chunking, map-reduce summarization, local model serving, translation, and interactive application development.
 
 ## Getting Started
 
-### 1. Clone this repository
+### Prerequisites
+
+- Python 3
+- Ollama installed locally
+- A YouTube video with accessible captions/transcript
+
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/sisbeyene/MULTI-LINGUAL-YOUTUBEVIDEO-SUMMARIZER-USING-LLAMA3.git
 cd MULTI-LINGUAL-YOUTUBEVIDEO-SUMMARIZER-USING-LLAMA3
 ```
 
-### 2. Install dependencies
+### 2. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Install and run Ollama
-
-Install Ollama and make sure Llama 3 is available locally.
+### 3. Download Llama 3 with Ollama
 
 ```bash
 ollama pull llama3
 ```
 
-Start Ollama if it is not already running, then verify the local service is available before launching the application.
+Make sure Ollama is running locally before starting the application.
 
-### 4. Run the application
+### 4. Launch the app
 
 ```bash
 python main.py
 ```
 
-Open the local URL shown by the application in your browser.
+Then open the local Gradio address displayed in the terminal.
 
 ## Using the Application
 
-1. Paste a YouTube URL.
-2. Retrieve the video information and transcript.
-3. Select the desired output language.
-4. Adjust summarization settings if needed.
-5. Generate the summary.
+1. Paste a valid YouTube URL.
+2. Click **Get Info** to retrieve the title and description.
+3. Click **Get Transcript** to inspect the transcript and estimated token count.
+4. Choose the summarization settings and output language.
+5. Click **Generate Summary**.
 
-## Multilingual Support
-
-The workflow supports output across a broad set of languages, including English, Spanish, French, German, Arabic, Amharic, Oromo, Somali, Swahili, Hindi, Bengali, Chinese, Japanese, Korean, and others supported by the translation component.
-
-## Repository Structure
+## Current Repository Structure
 
 ```text
 .
-├── main.py              # Main application and summarization workflow
+├── main.py              # Application, transcript processing, and LLM workflow
 ├── requirements.txt     # Python dependencies
-├── Untitled.ipynb       # Development notebook
-├── Untitled1.ipynb      # Development/experimentation notebook
+├── .gitignore           # Local/environment files excluded from version control
+├── Untitled.ipynb       # Early setup notebook (legacy)
+├── Untitled1.ipynb      # Development/experimentation notebook (legacy)
 └── README.md
 ```
 
-## Areas for Improvement
+The two notebooks are retained as development history; `main.py` is the maintained application entry point.
 
-- Improve transcript error handling when captions are unavailable.
-- Add automated tests for the transcript and summarization pipeline.
-- Evaluate summary quality across languages and video lengths.
-- Refactor experimental notebook work into clearer modules.
-- Add a hosted demo or application screenshots.
+## Current Limitations
+
+- Requires Ollama and Llama 3 to be running locally
+- Depends on an accessible YouTube transcript/captions
+- Translation uses an external translation library/service
+- Summary quality varies with transcript quality, video length, and model behavior
+- The project does not yet include a formal summary-quality benchmark
+
+## Next Improvements
+
+- Add automated tests for URL validation, chunking, and transcript handling
+- Evaluate summary quality across different video categories and lengths
+- Add application screenshots or a short demo
+- Separate the application into smaller modules as the project grows
+- Add optional export of summaries to Markdown or text
 
 ## Project Note
 
-This repository represents an LLM application project built around existing open-source tools and models including Llama 3, Ollama, LangChain, and Gradio. The focus is on integrating these components into an end-to-end multilingual video summarization workflow.
+This project integrates open-source models and libraries—including Llama 3, Ollama, LangChain, and Gradio—into an end-to-end video summarization application. The project focus is the design and integration of the workflow rather than training a language model from scratch.
